@@ -1,4 +1,6 @@
+import argparse
 import json
+import os
 import re
 import time
 
@@ -20,16 +22,15 @@ def crawl_citation(paper_id):
     url = citation_url
     start = 1
     citation_papers = []
+    print("Citations Crawling ...")
     while True:
         if start >= 31:
             url = f"{citation_url}?count={count}&start={start}&type=ieee"
         resp = session.get(url, headers=headers)
-        print("Citations Crawling ...")
         if resp.status_code == 200:
             resp = resp.json()
             ieee_citation = resp.get("paperCitations", None)
             if ieee_citation is not None:
-                print(ieee_citation)
                 related_papers = ieee_citation.get("ieee", None)
                 citation_papers.extend(related_papers)
             else:
@@ -101,45 +102,54 @@ def crawl_biography(author_id, url="https://ieeexplore.ieee.org/rest/author/"):
     return bio
 
 
-def save_file(paper_id, content):
-    with open(f"H:/{paper_id}.md", "a+", encoding="utf-8") as f:
+def save_file(paper_id, content, save_dir):
+    with open(f"{save_dir}/{paper_id}.md", "a+", encoding="utf-8") as f:
         f.write(content + "\n\n")
 
 
-def crawl_paper(paper_idx):
+def crawl_paper(paper_idx, save_dir):
     print(f"Paper Index: {paper_idx} ...")
     papers = fetch_citation(paper_idx)
     for (paper_id, paper) in enumerate(papers):
         print(f"Citation Index: {paper_idx} - {paper_id} ...")
         ref = paper["displayText"]
-        save_file(paper_idx, f"- [ ] {ref}")
+        save_file(paper_idx, f"- [ ] {ref}", save_dir)
         authors = fetch_authors(paper["ieeeLink"])
         for (author_id, author) in enumerate(authors):
             name = author.get("name", " ")
             rname = author.get('rname', "None")
             a_id = author.get("ieee_id", "None")
             affiliation = author.get("affiliation", " ")
-            save_file(paper_idx, f"  Author: {name}")
-            save_file(paper_idx, f"  AuthorInFList: {rname}")
-            save_file(paper_idx, f"  Affiliation: {affiliation}")
+            save_file(paper_idx, f"  Author: {name}", save_dir)
+            save_file(paper_idx, f"  AuthorInFList: {rname}", save_dir)
+            save_file(paper_idx, f"  Affiliation: {affiliation}", save_dir)
             if a_id is None:
                 bio = author["bio"]
             else:
                 link = "https://ieeexplore.ieee.org/rest/author/" + a_id
-                save_file(paper_idx, f"  Link: {link}")
+                save_file(paper_idx, f"  Link: {link}", save_dir)
                 bio = crawl_biography(a_id)
             bio_info = f"  Biography: "
 
             if bio is not None:
                 for bio_p in bio:
                     bio_info = bio_info + f"  {bio_p}"
-            save_file(paper_idx, bio_info)
+            save_file(paper_idx, bio_info, save_dir)
 
 
 if __name__ == '__main__':
     "Given a IEEE Paper ID, you can crawl all the citations of the paper"
+    parser = argparse.ArgumentParser(description='Scrape Paper References from IEEE Xplore')
+    parser.add_argument('--paper_ids', nargs='+', default=['8607062'],
+                        help='List of IEEE paper IDs to scrape references for (default: ["8607062"])')
+    parser.add_argument('--save_dir', type=str, default='H:\\',
+                        help='IEEE paper ID to scrape references for (default: H:\\)')
+    args = parser.parse_args()
     # paper_ids = [8884234, 8436039, 8489986, 8675169, 9667306, 8908666, 8607062, 8892573]
-    paper_ids = [8607062]
+
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
+    paper_ids = args.paper_ids
     for paper_idx in paper_ids:
-        crawl_paper(paper_idx)
+        crawl_paper(paper_idx, args.save_dir)
 
